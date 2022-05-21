@@ -19,35 +19,39 @@ public class ChangeStatusAndEmailService {
     private final OrderRepository orderRepository;
     private final ObjectMapper objectMapper;
 
+
     @Autowired
-    public EmailService(JavaMailSender javaMailSender, OrderRepository orderRepository) {
+    public ChangeStatusAndEmailService(JavaMailSender javaMailSender, OrderRepository orderRepository) {
         this.javaMailSender = javaMailSender;
         this.objectMapper = new ObjectMapper();
         this.orderRepository = orderRepository;
     }
 
-    public ChangeStatusAndEmailService() {
-    }
 
-    public void productsAppeared(String mes) {
+    public boolean productsAppeared(String mes) {
         try {
             ProductsAppearedMessage message = objectMapper.readValue(mes, ProductsAppearedMessage.class);
+            Order order = orderRepository.findById(message.getOrderId()).orElseThrow(() -> new IllegalArgumentException("Wrong id"));
             SimpleMailMessage msg = new SimpleMailMessage();
             msg.setTo(message.getEmail());
-            msg.setSubject("");
-            String text = String.format("Здравствуйте, %s!\n\nВаш отзыв №%d на машину %s успешно добавлен.\n" +
-                            "Он будет виден другим пользователям после того, как пройдёт модерацию.\n\n" +
-                            "С уважением, команда Wroom.ru-feldme.",
-                    reviewMessage.getName(), reviewMessage.getReviewId(), reviewMessage.getCarModel());
+            msg.setSubject("Подтверждение заказа");
+            String text = String.format("Здравствуйте, %s!\n\nВаш заказ №%d подтвержден.\n" +
+                            "Изменение статуса: %s ---> %s.\n\n" +
+                            "С уважением, команда разработчков лабораторной №3.",
+                    message.getUsername(), message.getOrderId(), order.getStatus(), OrderStatus.ACCEPTED);
             msg.setText(text);
             javaMailSender.send(msg);
-            log.info("Message to {} sent.", reviewMessage.getEmail());
+            log.info("Message to {} sent.", message.getEmail());
+            order.setStatus(OrderStatus.ACCEPTED);
+            orderRepository.save(order);
+            return true;
         } catch (Exception ignored) {
             log.error("Sending message error");
+            return false;
         }
     }
 
-    public boolean changeStatus(String mes){
+    public boolean changeStatus(String mes) {
         try {
             ChangeOrderStatusMessage message = objectMapper.readValue(mes, ChangeOrderStatusMessage.class);
             Order order = orderRepository.findById(message.getOrderId()).orElseThrow(() -> new IllegalArgumentException("Wrong id"));
@@ -60,15 +64,13 @@ public class ChangeStatusAndEmailService {
                     message.getUsername(), message.getOrderId(), order.getStatus(), message.getNewStatus());
             msg.setText(text);
             javaMailSender.send(msg);
-            log.info("Message to {} sent.", reviewMessage.getEmail());
+            log.info("Message to {} sent.", message.getEmail());
             order.setStatus(message.getNewStatus());
             orderRepository.save(order);
-        }
-        catch(Exception e){
-            return false;
-        }
-        catch (Exception ignored){
+            return true;
+        } catch (Exception ignored) {
             log.error("Sending message error");
+            return false;
         }
     }
 }
