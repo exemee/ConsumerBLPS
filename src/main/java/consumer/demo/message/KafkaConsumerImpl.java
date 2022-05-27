@@ -8,23 +8,30 @@ import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.Properties;
 
 @Service
-@RequiredArgsConstructor
 public class KafkaConsumerImpl {
     private final ChangeStatusAndEmailService service;
 
+    @Autowired
+    public KafkaConsumerImpl(ChangeStatusAndEmailService service){
+        this.service = service;
+      //  runConsumer();
+    }
 
     private static Consumer<Long, String> createConsumer() {
         final Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
-        props.put("acks", "all");
-        props.put("key.deserializer", "org.apache.kafka.common.serialization.IntSerializer");
-        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("group.id", "blps");
+        props.put("enable.auto.commit", "true");
+        props.put("auto.commit.interval.ms", "1000");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 
         // Create the consumer using props.
         final Consumer<Long, String> consumer =
@@ -37,34 +44,16 @@ public class KafkaConsumerImpl {
         return consumer;
     }
 
-    void runConsumer() throws InterruptedException {
-        final Consumer<Long, String> consumer = createConsumer();
+    void runConsumer() {
+            final Consumer<Long, String> consumer = createConsumer();
 
-        final int giveUp = 100;   int noRecordsCount = 0;
-
-        while (true) {
-            final ConsumerRecords<Long, String> consumerRecords =
-                    consumer.poll(1000);
-
-            if (consumerRecords.count()==0) {
-                noRecordsCount++;
-                if (noRecordsCount > giveUp) break;
-                else continue;
+            while (true) {
+                final ConsumerRecords<Long, String> consumerRecords =
+                        consumer.poll(1000);
+                consumerRecords.forEach(record -> {
+                });
+                consumer.commitAsync();
             }
-
-            consumerRecords.forEach(record -> {
-                System.out.printf("Consumer Record:(%d, %s, %d, %d)\n",
-                        record.key(), record.value(),
-                        record.partition(), record.topic());
-                if(record.topic()=="status-changed")
-                service.changeStatus(record.value());
-                else service.productsAppeared(record.value());
-            });
-
-            consumer.commitAsync();
-        }
-        consumer.close();
-        System.out.println("DONE");
     }
 
     }
